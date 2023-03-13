@@ -23,26 +23,11 @@ def main() -> None:
     nft_trades_df.sort_values(
         ["chain_id", "contract_address", "block_number"], inplace=True
     )
-    nft_trades_df["rank"] = nft_trades_df.groupby(["chain_id", "contract_address"])[
-        "block_number"
-    ].rank(method="first", ascending=False)
-    nft_trades_df = nft_trades_df[nft_trades_df["rank"] < BACKTEST + LOOKBACK * 2].drop(
-        "rank", axis=1
-    )
 
     logging.info("creating lookback")
     nft_trades_df = (
         nft_trades_df.groupby(by=["chain_id", "contract_address"])
         .apply(partial(cbnftfloorprice.create_lookback, lookback=LOOKBACK))
-        .reset_index(drop=True)
-    )
-
-    logging.info("restricting to backtest window")
-    nft_trades_df = (
-        nft_trades_df.groupby(by=["chain_id", "contract_address"])
-        .apply(
-            lambda x: x.iloc[-BACKTEST:],
-        )
         .reset_index(drop=True)
     )
 

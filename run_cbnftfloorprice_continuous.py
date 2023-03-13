@@ -54,12 +54,14 @@ def main() -> None:
     nft_trades_grouped_df = (
         nft_trades_df[["chain_id", "contract_address", "price_smaller", "one"]]
         .groupby(["chain_id", "contract_address"])
-        .agg("sum")
-    )
+        .rolling(800)
+        .sum()
+    ).reset_index().drop('level_2', axis=1)
+    nft_trades_grouped_df = nft_trades_grouped_df.dropna()
     nft_trades_grouped_df["quantile_obs"] = (
         nft_trades_grouped_df["price_smaller"] / nft_trades_grouped_df["one"]
     )
-    breakpoint()
+
     logging.info("compute adjusted quantile")
     nft_trades_grouped_df["quantile_adj"] = nft_trades_grouped_df.apply(
         lambda x: cbnftfloorprice.compute_new_quantile(
@@ -74,11 +76,8 @@ def main() -> None:
     )
 
     logging.info("computing adjusted log price")
-    nft_trades_df = nft_trades_df.drop(["price_smaller", "one"], axis=1,).merge(
-        nft_trades_grouped_df,
-        left_on=["chain_id", "contract_address"],
-        right_index=True,
-        how="left",
+    nft_trades_df = nft_trades_df.drop(["price_smaller", "one"], axis=1,).join( 
+        nft_trades_grouped_df[['quantile_adj']], how='inner'
     )
     nft_trades_df["log_price_adj"] = nft_trades_df.apply(
         lambda x: cbnftfloorprice.compute_quantile(

@@ -15,18 +15,24 @@ SPEED = 0.5
 
 def main() -> None:
     logging.info("reading data")
-    nft_trades_df = pd.read_csv("nft_trades.csv")
-
+    filename = 'nft_trades_v2'
+    nft_trades_df = pd.read_csv(f"{filename}.csv")
+    # TODO: Make collection addr an input
+    nft_trades_df = \
+        nft_trades_df[
+            nft_trades_df.contract_address ==\
+                '0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D'.lower()
+            ]
     logging.info("preprocessing")
     nft_trades_df = nft_trades_df[nft_trades_df["price_eth"] > 0]
     nft_trades_df["log_price"] = np.log(nft_trades_df["price_eth"])
     nft_trades_df.sort_values(
-        ["chain_id", "contract_address", "block_number"], inplace=True
+        ["collection", "block_number"], inplace=True
     )
 
     logging.info("creating lookback")
     nft_trades_df = (
-        nft_trades_df.groupby(by=["chain_id", "contract_address"])
+        nft_trades_df.groupby(by=["collection"])
         .apply(partial(cbnftfloorprice.create_lookback, lookback=LOOKBACK))
         .reset_index(drop=True)
     )
@@ -52,8 +58,8 @@ def main() -> None:
     )
     nft_trades_df["one"] = 1
     nft_trades_grouped_df = (
-        nft_trades_df[["chain_id", "contract_address", "price_smaller", "one"]]
-        .groupby(["chain_id", "contract_address"])
+        nft_trades_df[["collection", "price_smaller", "one"]]
+        .groupby(["collection"])
         .rolling(800)
         .sum()
     ).reset_index().drop('level_2', axis=1)
@@ -87,15 +93,8 @@ def main() -> None:
         axis=1,
     )
 
-    logging.info("getting results")
-    result_df = nft_trades_df.groupby(["chain_id", "contract_address"]).tail(1).copy()
-    result_df["floor_price_est"] = np.exp(result_df["log_price_adj"])
-
-    records = result_df.to_dict("records")
-    for record in records:
-        logging.info(
-            f"Floor price estimate for {record['contract_address']} (in ETH): {record['floor_price_est']}"
-        )
+    nft_trades_df["floor_price_est"] = np.exp(nft_trades_df["log_price_adj"])
+    nft_trades_df.to_csv(f'{filename}_results.csv')
 
 
 if __name__ == "__main__":
